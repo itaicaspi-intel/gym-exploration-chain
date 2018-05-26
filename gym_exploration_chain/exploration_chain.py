@@ -13,8 +13,8 @@ class ExplorationChain(gym.Env):
         OneHot = 0
         Therm = 1
 
-    def __init__(self, chain_length=16, start_state=1, max_steps=None, observation_type=ObservationType.Therm,
-                 left_state_reward=1/1000, right_state_reward=1, simple_render=True):
+    def __init__(self, chain_length=16, start_state=1, max_steps=100, observation_type=ObservationType.Therm,
+                 left_state_reward=1/1000, right_state_reward=1):
         super().__init__()
         if chain_length <= 3:
             raise ValueError('Chain length must be > 3, found {}'.format(chain_length))
@@ -26,16 +26,18 @@ class ExplorationChain(gym.Env):
         self.observation_type = observation_type
         self.left_state_reward = left_state_reward
         self.right_state_reward = right_state_reward
-        self.simple_render = simple_render
 
         # spaces documentation: https://gym.openai.com/docs/
         self.action_space = spaces.Discrete(2)  # 0 -> Go left, 1 -> Go right
-        self.observation_space = spaces.Box(0, 1, shape=(chain_length,))#spaces.MultiBinary(chain_length)
+        self.observation_space = spaces.Box(0, 1, shape=(chain_length,))
 
         self.reset()
 
     def _terminate(self):
-        return self.steps >= self.max_steps
+        if self.max_steps:
+            return self.steps >= self.max_steps
+        else:
+            return False
 
     def _reward(self):
         if self.state == 0:
@@ -77,50 +79,6 @@ class ExplorationChain(gym.Env):
         return self.observation
 
     def _render(self, mode='human', close=False):
-        if self.simple_render:
-            observation = np.zeros((20, 20*self.chain_length))
-            observation[:, self.state*20:(self.state+1)*20] = 255
-            return observation
-        else:
-            # lazy loading of networkx and matplotlib to allow using the environment without installing them if
-            # necessary
-            import networkx as nx
-            from networkx.drawing.nx_agraph import graphviz_layout
-            import matplotlib.pyplot as plt
-
-            if not hasattr(self, 'G'):
-                self.states = list(range(self.chain_length))
-                self.G = nx.DiGraph(directed=True)
-                for i, origin_state in enumerate(self.states):
-                    if i < self.chain_length - 1:
-                        self.G.add_edge(origin_state,
-                                        origin_state + 1,
-                                        weight=0.5)
-                    if i > 0:
-                        self.G.add_edge(origin_state,
-                                        origin_state - 1,
-                                        weight=0.5, )
-                    if i == 0 or i < self.chain_length - 1:
-                        self.G.add_edge(origin_state,
-                                        origin_state,
-                                        weight=0.5, )
-
-            fig = plt.gcf()
-            if np.all(fig.get_size_inches() != [10, 2]):
-                fig.set_size_inches(5, 1)
-            color = ['y']*(len(self.G))
-            color[self.state] = 'r'
-            options = {
-                'node_color': color,
-                'node_size': 50,
-                'width': 1,
-                'arrowstyle': '-|>',
-                'arrowsize': 5,
-                'font_size': 6
-            }
-            pos = graphviz_layout(self.G, prog='dot', args='-Grankdir=LR')
-            nx.draw_networkx(self.G, pos, arrows=True, **options)
-            fig.canvas.draw()
-            data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-            data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            return data
+        observation = np.zeros((20, 20*self.chain_length))
+        observation[:, self.state*20:(self.state+1)*20] = 255
+        return observation
